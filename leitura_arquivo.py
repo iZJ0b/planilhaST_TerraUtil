@@ -56,10 +56,7 @@ def ler_planilha(planilha):
 
     df["Análise da Metrópole"] = df.apply(analise_metropoles, axis=1)
 
-    # output = io.BytesIO()
-    # with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-    #     df.to_excel(writer, index=False, sheet_name='Dados')
-    # processed_data = output.getvalue()
+    df["RECOMENDAÇÕES"] = df.apply(recomendacoes, axis=1)
 
     return df
 
@@ -109,12 +106,14 @@ def verificar_produto_caderno(row):
     return existe_caderno
 
 def verificar_calculo_correto(row):
-    if row[" Cod. Fiscal"] == 5403:
+    if row[" Cod. Fiscal"] == 5403 or row[" Cod. Fiscal"] == 6404:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-            if row["DIFERENÇA ICMS ST METRÓPOLE"] == 0:
+            if -0.1 <= row["DIFERENÇA ICMS ST METRÓPOLE"] <= 0.1:
                 return 'Sim'
             return 'Não'
         return 'Não'
+    else:
+        return 'Não Aplicável'
 
 def mva_legislacao(row):
     if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
@@ -136,26 +135,37 @@ def cfop_legislacao(row):
     
     else:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-            return 5403
+            if row['Estado Ref '] == 'DF':
+                return 5403
+            else:
+                return row['CFOP DA NF-e']
+        else:
+            if row['CFOP DA NF-e'] == 5403:
+                return 5102
+            else:
+                return row['CFOP DA NF-e']
 
 def analise_metropoles(row):
     if row['CFOP DA NF-e'] == 5403:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
             if str(row["CEST"]).strip() != '' and str(row["   NCM Cadastro de Produto"]).strip()  != '':
-                if row['DIFERENÇA ICMS ST METRÓPOLE'] == 0:
+                if -0.1 <= row['DIFERENÇA ICMS ST METRÓPOLE'] <= 0.1:
                     return 'Validado'
                 else:
                     return 'Validado Parcialmente'
             else:
-                if row['DIFERENÇA ICMS ST METRÓPOLE'] == 0:
+                if -0.1 <= row['DIFERENÇA ICMS ST METRÓPOLE'] <= 0.1:
                     return 'Validado Parcialmente'
                 else:
                     return 'Validado Parcialmente'
+        
+        else:
+            return 'CFOP Divergente'
     
     elif row['CFOP DA NF-e'] == 6404:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
             if str(row["CEST"]).strip() != '' and str(row["   NCM Cadastro de Produto"]).strip() != '':
-                if row['DIFERENÇA ICMS ST METRÓPOLE'] == 0:
+                if -0.1 <= row['DIFERENÇA ICMS ST METRÓPOLE'] <= 0.1:
                     if row['TEM CONVÊNIO OU PROTOCOLO DE ICMS?'] == 'Sim':
                         return 'Validado'
                     else:
@@ -164,10 +174,36 @@ def analise_metropoles(row):
                     return 'Validado Parcialmente'
             
             else:
-                if row['DIFERENÇA ICMS ST METRÓPOLE'] == 0:
+                if -0.1 <= row['DIFERENÇA ICMS ST METRÓPOLE'] <= 0.1:
                     return 'Validado Parcialmente'
                 else:
                     return 'Validado Parcialmente'
+        else:
+            return 'CFOP Divergente'
+    
+    else:
+        if row['CFOP DA NF-e'] != row["CFOP DA LEGISLAÇÃO"]:
+            return  'CFOP Divergente'
+        else:
+            return 'Não Aplicável'
+
+def recomendacoes(row):
+    if row['Análise da Metrópole'] == 'Não Aplicável':
+        return 'Não Aplicável'
+    
+    elif row['Análise da Metrópole'] == 'Validado':
+        return 'Não Aplicável'
+    
+    elif row['Análise da Metrópole'] == 'Validado Parcialmente':
+        if str(row['CEST']).strip() == '':
+            return 'Sugerimos que o CEST do produto seja cadastro como: '
+        else:
+            if row['CFOP DA NF-e'] != row["CFOP DA LEGISLAÇÃO"]:
+                return f'Sugerimos que o CFOP do produto seja alterado para: {row["CFOP DA LEGISLAÇÃO"]}'
+    
+    elif row['Análise da Metrópole'] == 'CFOP Divergente':
+        return f'Sugerimos que o CFOP do produto seja alterado para: {row["CFOP DA LEGISLAÇÃO"]}'
+    
 
 def teste_caderno():
     df = pd.read_excel('input/(250107) TABELA SFT ICMS ST SAIDA DF 12-2024 - TERRA ÚTIL V1.3.xlsx', sheet_name='Caderno')
@@ -225,8 +261,8 @@ def personalizar_planilha(df):
     return output
             
 if __name__ == '__main__':
-    # ler_planilha('input/planilha_input_terra_util.xlsx')
-    personalizar_planilha('teste.xlsx')
+    ler_planilha('input/planilha_input_terra_util.xlsx')
+    # personalizar_planilha('teste.xlsx')
     # teste_caderno()
 
     # descricao_tabela = "Parafusos, pinos ou pernos, roscados, porcas, tira-fundos, ganchos roscados, rebites, chavetas, cavilhas, contrapinos, arruelas (incluídas as de pressão) e artefatos semelhantes, de ferro fundido, ferro ou aço"
