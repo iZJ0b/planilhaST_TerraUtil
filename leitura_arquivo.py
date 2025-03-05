@@ -47,9 +47,11 @@ def ler_planilha(planilha):
     df["O CÁLCULO ESTÁ CORRETO?"] = df.apply(verificar_calculo_correto, axis=1)
 
     df["MVA DA NF-e"] = df["Margem "]
+    df["MVA DA NF-e"] = df["MVA DA NF-e"].map(lambda x: f"{x:.2f}".replace('.', ',') + "%")
 
     df["MVA DA LEGISLAÇÃO"] = df.apply(mva_legislacao, axis=1)
-
+    df["MVA DA LEGISLAÇÃO"] = df["MVA DA LEGISLAÇÃO"].map(lambda x: f"{x:.2f}".replace('.', ',') + "%")
+    
     df["CFOP DA NF-e"] = df[" Cod. Fiscal"]
 
     df["CFOP DA LEGISLAÇÃO"] = df.apply(cfop_legislacao, axis=1)
@@ -107,13 +109,13 @@ def verificar_produto_caderno(row):
 
 def verificar_calculo_correto(row):
     if row[" Cod. Fiscal"] == 5403 or row[" Cod. Fiscal"] == 6404:
-        if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-            if -0.1 <= row["DIFERENÇA ICMS ST METRÓPOLE"] <= 0.1:
-                return 'Sim'
-            return 'Não'
+        # if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
+        if -0.1 <= row["DIFERENÇA ICMS ST METRÓPOLE"] <= 0.1:
+            return 'Sim'
         return 'Não'
+        # return 'Não houve'
     else:
-        return 'Não Aplicável'
+        return 'Não houve cálculo'
 
 def mva_legislacao(row):
     if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
@@ -148,7 +150,9 @@ def cfop_legislacao(row):
 def analise_metropoles(row):
     if row['CFOP DA NF-e'] == 5403:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-            if str(row["CEST"]).strip() != '' and str(row["   NCM Cadastro de Produto"]).strip()  != '':
+            if row["MVA DA NF-e"] != row["MVA DA LEGISLAÇÃO"]:
+                return 'Analisar'
+            elif str(row["CEST"]).strip() != '' and str(row["   NCM Cadastro de Produto"]).strip()  != '':
                 if -0.1 <= row['DIFERENÇA ICMS ST METRÓPOLE'] <= 0.1:
                     return 'Validado'
                 else:
@@ -160,7 +164,7 @@ def analise_metropoles(row):
                     return 'Validado Parcialmente'
         
         else:
-            return 'CFOP Divergente'
+            return 'Analisar'
     
     elif row['CFOP DA NF-e'] == 6404:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
@@ -179,32 +183,19 @@ def analise_metropoles(row):
                 else:
                     return 'Validado Parcialmente'
         else:
-            return 'CFOP Divergente'
+            return 'Analisar'
     
     else:
         if row['CFOP DA NF-e'] != row["CFOP DA LEGISLAÇÃO"]:
-            return  'CFOP Divergente'
-        else:
-            return 'Não Aplicável'
+            return  'Analisar'
 
 def recomendacoes(row):
-    if row['Análise da Metrópole'] == 'Não Aplicável':
-        return 'Não Aplicável'
     
-    elif row['Análise da Metrópole'] == 'Validado':
-        return 'Não Aplicável'
-    
-    elif row['Análise da Metrópole'] == 'Validado Parcialmente':
+    if row['Análise da Metrópole'] == 'Validado Parcialmente':
         if str(row['CEST']).strip() == '':
-            return 'Sugerimos que o CEST do produto seja cadastro como: '
-        else:
-            if row['CFOP DA NF-e'] != row["CFOP DA LEGISLAÇÃO"]:
-                return f'Sugerimos que o CFOP do produto seja alterado para: {row["CFOP DA LEGISLAÇÃO"]}'
+            return 'Indicar CEST'
+        
     
-    elif row['Análise da Metrópole'] == 'CFOP Divergente':
-        return f'Sugerimos que o CFOP do produto seja alterado para: {row["CFOP DA LEGISLAÇÃO"]}'
-    
-
 def teste_caderno():
     df = pd.read_excel('input/(250107) TABELA SFT ICMS ST SAIDA DF 12-2024 - TERRA ÚTIL V1.3.xlsx', sheet_name='Caderno')
     import re
