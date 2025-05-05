@@ -38,6 +38,10 @@ def ler_planilha(planilha):
     df.loc[df[" Cod. Fiscal"].isin([5403, 6404]), "DIFERENÇA BC METRÓPOLE"] = df["Vlr Base Ret"] - df["BC ICMS RET METRÓPOLE"]
     df.loc[df[" Cod. Fiscal"].isin([5403, 6404]), "DIFERENÇA ICMS ST METRÓPOLE"] = df["ICMS ST METRÓPOLE"] - df["Vlr ICMS Ret"]
 
+    # zerar os valores na coluna de diferenças quando -0.1 <= x <= 0.1
+    df.loc[(df["DIFERENÇA ICMS ST METRÓPOLE"] >= -0.1) & (df["DIFERENÇA ICMS ST METRÓPOLE"] <= 0.1), "DIFERENÇA ICMS ST METRÓPOLE"] = 0.0
+    df.loc[(df["DIFERENÇA BC METRÓPOLE"] >= -0.1) & (df["DIFERENÇA BC METRÓPOLE"] <= 0.1), "DIFERENÇA BC METRÓPOLE"] = 0.0
+    
     # VERIFICAR SE O PRODUTO TEM CONVENIO OU PROTOCOLO DE ICMS PARA CFOP 6404
     
     df["TEM CONVÊNIO OU PROTOCOLO DE ICMS?"] = df.apply(verificar_convenio, axis=1)
@@ -66,20 +70,20 @@ def ler_planilha(planilha):
 def verificar_convenio(row):
     if row[" Cod. Fiscal"] == 6404:
         convenio = 'Não'
-        if str(row["CEST"]).strip() != '':
+        if str(row["CEST SFT"]).strip() != '':
             for item in dados_caderno:
                 if item['CEST'] is None:
-                    if str(item['NCMSH']).replace('.', '') in str(row["   NCM Cadastro de Produto"]):
+                    if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                         if row['Estado Ref '] in item['UFDEORIGEM']:
                             convenio = 'Sim'
                             break
-                elif str(item['CEST']).replace('.', '') in str(row["CEST"]) or str(item['NCMSH']).replace('.', '') in str(row["   NCM Cadastro de Produto"]):
+                elif str(item['CEST']).replace('.', '') in str(row["CEST SFT"]) or str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                     if row['Estado Ref '] in item['UFDEORIGEM']:
                         convenio = 'Sim'
                         break
         else:
             for item in dados_caderno:
-                if str(item['NCMSH']).replace('.', '') in str(row["   NCM Cadastro de Produto"]):
+                if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                     if row['Estado Ref '] in item['UFDEORIGEM']:
                         convenio = 'Sim'
                         break
@@ -89,19 +93,19 @@ def verificar_convenio(row):
 
 def verificar_produto_caderno(row):
     existe_caderno = 'Não'
-    if str(row["CEST"]).strip() != '':
+    if str(row["CEST SFT"]).strip() != '':
         for item in dados_caderno:
             if item['CEST'] is None:
-                if str(item['NCMSH']).replace('.', '') in str(row["   NCM Cadastro de Produto"]):
+                if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                     existe_caderno = 'Sim'
                     break
-            elif str(item['CEST']).replace('.', '') in str(row["CEST"]).strip() or str(item['NCMSH']).replace('.', '') in str(row["   NCM Cadastro de Produto"]):
+            elif str(item['CEST']).replace('.', '') in str(row["CEST SFT"]).strip() or str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                 existe_caderno = 'Sim'
                 break
     
     else:
         for item in dados_caderno:
-            if str(item['NCMSH']).replace('.', '') in str(row["   NCM Cadastro de Produto"]):
+            if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                 existe_caderno = 'Sim'
                 break
 
@@ -121,9 +125,9 @@ def mva_legislacao(row):
     if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
         for item in dados_caderno:
             if item['CEST'] is None:
-                if int(str(item['NCMSH']).replace('.', '')) == int(row["   NCM Cadastro de Produto"]):
+                if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                     return item["MVAST_Interna_Atacadistas"]
-            elif int(str(item['CEST']).replace('.', '')) == [str(row["CEST CADASTRO PRODUTO"]).strip() if str(row["CEST CADASTRO PRODUTO"]).strip() == '' else int(row["CEST CADASTRO PRODUTO"])][0] or int(str(item['NCMSH']).replace('.', '')) == int(row["   NCM Cadastro de Produto"]):
+            elif int(str(item['CEST']).replace('.', '')) == [str(row["CEST SFT"]).strip() if str(row["CEST SFT"]).strip() == '' else int(row["CEST SFT"])][0] or str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
                 return item["MVAST_Interna_Atacadistas"]
 
     return 0.00
@@ -191,9 +195,9 @@ def analise_metropoles(row):
 
 def recomendacoes(row):
     
-    if row['Análise da Metrópole'] == 'Validado Parcialmente':
-        if str(row['CEST']).strip() == '':
-            return 'Indicar CEST'
+    # if row['Análise da Metrópole'] == 'Validado Parcialmente':
+    if str(row["CEST SFT"]).strip() == '':
+        return 'Indicar CEST'
         
     
 def teste_caderno():
@@ -252,7 +256,7 @@ def personalizar_planilha(df):
     return output
             
 if __name__ == '__main__':
-    ler_planilha('input/planilha_input_terra_util.xlsx')
+    ler_planilha('/Users/matheusbarbosa/Downloads/(250408) SFT TERRA UTIL ORIGINAL V1.0.xlsx')
     # personalizar_planilha('teste.xlsx')
     # teste_caderno()
 
