@@ -48,21 +48,22 @@ def ler_planilha(planilha):
 
     df["SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?"] = df.apply(verificar_produto_caderno, axis=1)
 
-    df["O CÁLCULO ESTÁ CORRETO?"] = df.apply(verificar_calculo_correto, axis=1)
-
     df["MVA DA NF-e"] = df["Margem "]
     df["MVA DA NF-e"] = df["MVA DA NF-e"].map(lambda x: f"{x:.2f}".replace('.', ',') + "%")
 
     df["MVA DA LEGISLAÇÃO"] = df.apply(mva_legislacao, axis=1)
-    df["MVA DA LEGISLAÇÃO"] = df["MVA DA LEGISLAÇÃO"].map(lambda x: f"{x:.2f}".replace('.', ',') + "%")
+    df["MVA DA LEGISLAÇÃO"] = df["MVA DA LEGISLAÇÃO"].map(lambda x: f"{x:.2f}".replace('.', ',') + "%" if str(x) != 'Indicar MVA' else x)
     
     df["CFOP DA NF-e"] = df[" Cod. Fiscal"]
 
     df["CFOP DA LEGISLAÇÃO"] = df.apply(cfop_legislacao, axis=1)
-
-    df["Análise da Metrópole"] = df.apply(analise_metropoles, axis=1)
+    
+    df["O CÁLCULO ESTÁ CORRETO?"] = df.apply(verificar_calculo_correto, axis=1)
 
     df["RECOMENDAÇÕES"] = df.apply(recomendacoes, axis=1)
+    
+    df["Análise da Metrópole"] = df.apply(analise_metropoles, axis=1)
+
 
     return df
 
@@ -93,19 +94,27 @@ def verificar_convenio(row):
 
 def verificar_produto_caderno(row):
     existe_caderno = 'Não'
+    if row[" Cod. Fiscal"] in [5922, 5914, 5910, 5119, 5117, 2202, 1202]:
+        return 'Não'
+    
     if str(row["CEST SFT"]).strip() != '':
+        achou_cest = False
         for item in dados_caderno:
             if item['CEST'] is None:
-                if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
-                    existe_caderno = 'Sim'
-                    break
-            elif str(item['CEST']).replace('.', '') in str(row["CEST SFT"]).strip() or str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
+                continue
+            if str(item['CEST']).replace('.', '') == row["CEST SFT"].strip():
+                achou_cest = True
                 existe_caderno = 'Sim'
                 break
+        if not achou_cest:
+            for item in dados_caderno:
+                if str(row["   NCM Cadastro de Produto"]).replace('.', '').strip()[:4] in str(item['NCMSH']).replace('.', '').strip():
+                    existe_caderno = 'Sim'
+                    break
     
     else:
         for item in dados_caderno:
-            if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
+            if str(row["   NCM Cadastro de Produto"]).replace('.', '').strip()[:4] in str(item['NCMSH']).replace('.', '').strip():
                 existe_caderno = 'Sim'
                 break
 
@@ -114,21 +123,51 @@ def verificar_produto_caderno(row):
 def verificar_calculo_correto(row):
     if row[" Cod. Fiscal"] == 5403 or row[" Cod. Fiscal"] == 6404:
         # if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-        if -0.1 <= row["DIFERENÇA ICMS ST METRÓPOLE"] <= 0.1:
+        if -0.1 <= row["DIFERENÇA ICMS ST METRÓPOLE"] <= 0.1 and row['MVA DA NF-e'] == row['MVA DA LEGISLAÇÃO']:
             return 'Sim'
+        
+        elif float(row['Margem ']) == 0:
+            return 'Não houve cálculo'
         return 'Não'
-        # return 'Não houve'
+
     else:
         return 'Não houve cálculo'
 
 def mva_legislacao(row):
     if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-        for item in dados_caderno:
-            if item['CEST'] is None:
-                if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
+        if row[" Cod. Fiscal"] == 6102:
+            return 'Indicar MVA'
+        if str(row["CEST SFT"]).strip() == '':
+            achou_ncm = False
+            for item in dados_caderno:
+                # if item['CEST'] is None:
+                    # if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
+                    if str(row["   NCM Cadastro de Produto"]).replace('.', '').strip()[:4] in str(item['NCMSH']).replace('.', '').strip():
+                        achou_ncm = True
+                        return item["MVAST_Interna_Atacadistas"]
+            
+            if not achou_ncm:
+                return 0.00
+                
+        else:
+            achou_cest = False
+            for item in dados_caderno:
+                if item['CEST'] is None:
+                    continue
+                if str(item['CEST']).replace('.', '') == row["CEST SFT"].strip():
+                    achou_cest = True
                     return item["MVAST_Interna_Atacadistas"]
-            elif int(str(item['CEST']).replace('.', '')) == [str(row["CEST SFT"]).strip() if str(row["CEST SFT"]).strip() == '' else int(row["CEST SFT"])][0] or str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
-                return item["MVAST_Interna_Atacadistas"]
+            if not achou_cest:
+                achou_ncm = False
+                for item in dados_caderno:
+                    # if item['CEST'] is None:
+                        # if str(item['NCMSH']).replace('.', '').strip() in str(row["   NCM Cadastro de Produto"]):
+                        if str(row["   NCM Cadastro de Produto"]).replace('.', '').strip()[:4] in str(item['NCMSH']).replace('.', '').strip():
+                            achou_ncm = True
+                            return item["MVAST_Interna_Atacadistas"]
+                
+                if not achou_ncm:
+                    return 0.00
 
     return 0.00
 
@@ -141,8 +180,14 @@ def cfop_legislacao(row):
     
     else:
         if row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
-            if row['Estado Ref '] == 'DF':
+            if row['CFOP DA NF-e'] == 6102:
+                return 6404
+            elif row['CFOP DA NF-e'] == 5102:
                 return 5403
+            elif row['CFOP DA NF-e'] in [2411, 1411]:
+                return 6404
+            elif row['Estado Ref '] == 'DF':
+                return row['CFOP DA NF-e']
             else:
                 return row['CFOP DA NF-e']
         else:
@@ -188,18 +233,33 @@ def analise_metropoles(row):
                     return 'Validado Parcialmente'
         else:
             return 'Analisar'
+    elif row['CFOP DA NF-e'] in [2411, 1411]:
+        return 'Analisar'
     
     else:
         if row['CFOP DA NF-e'] != row["CFOP DA LEGISLAÇÃO"]:
-            return  'Analisar'
+            if row['CFOP DA NF-e'] == 5102:
+                return 'Não Validado em virtude desse produto está sujeito ao ICMS ST'
+            return 'Analisar'
+        
+        elif row['MVA DA NF-e'] != row['MVA DA LEGISLAÇÃO']:
+            return 'Analisar'
+        
+        elif row['RECOMENDAÇÕES'] == 'Indicar CEST':
+            return 'Validado Parcialmente'
+        
+        else:
+            return 'Validado'
+        
 
 def recomendacoes(row):
-    
     # if row['Análise da Metrópole'] == 'Validado Parcialmente':
+    if row['CFOP DA NF-e'] == 5102 and row['SUBSTITUTO TRIBUTÁRIO OPERAÇÕES INTERNAS?'] == 'Sim':
+        return 'Ajustar o cadastro do produto para que nas  próximas vendas calcule  o ICMS ST, exceto se destinado a uso e consumo ou ativo imobilizado do adquirente devidamente comprovado por declaração expressa.'
+    
     if str(row["CEST SFT"]).strip() == '':
         return 'Indicar CEST'
         
-    
 def teste_caderno():
     df = pd.read_excel('input/(250107) TABELA SFT ICMS ST SAIDA DF 12-2024 - TERRA ÚTIL V1.3.xlsx', sheet_name='Caderno')
     import re
